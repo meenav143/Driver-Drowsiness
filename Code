@@ -1,0 +1,80 @@
+clc; clear; close all;
+
+% -------- CAMERA SETUP --------
+cams = webcamlist;
+if isempty(cams)
+    error('No webcam found. Please check your camera or install support package.');
+end
+cam = webcam(cams{1});  % Use laptop webcam
+
+% -------- DETECTORS --------
+faceDetector = vision.CascadeObjectDetector();
+eyeDetector = vision.CascadeObjectDetector('EyePairBig');
+
+% -------- PARAMETERS --------
+blinkFrameCount = 0;
+tiltFrameCount = 0;
+blinkThreshold = 15;
+tiltThreshold = 15;
+buzzer_on = false;  % For simulation logic
+frameLimit = 300;
+
+% -------- MAIN SIMULATION LOOP --------
+for i = 1:frameLimit
+    frame = snapshot(cam);
+    gray = rgb2gray(frame);
+
+    bbox_face = step(faceDetector, gray);
+    bbox_eye = step(eyeDetector, gray);
+
+    imshow(frame); title('Driver Fatigue Monitoring'); hold on;
+
+    % ---- Face Detection & Tilt ----
+    if ~isempty(bbox_face)
+        rectangle('Position', bbox_face(1,:), 'EdgeColor', 'g', 'LineWidth', 2);
+        face = bbox_face(1,:);
+        aspect_ratio = face(3)/face(4);
+        if aspect_ratio < 0.75 || aspect_ratio > 1.6
+            tiltFrameCount = tiltFrameCount + 1;
+        else
+            tiltFrameCount = max(tiltFrameCount - 1, 0);
+        end
+    end
+
+    % ---- Eye Detection ----
+    if isempty(bbox_eye)
+        blinkFrameCount = blinkFrameCount + 1;
+    else
+        rectangle('Position', bbox_eye(1,:), 'EdgeColor', 'b', 'LineWidth', 2);
+        blinkFrameCount = max(blinkFrameCount - 1, 0);
+    end
+
+    % ---- Fatigue Detection and Buzzer Simulation ----
+  % Parameters for buzzer tone
+fs = 8000;                     % Sampling frequency
+t = 0:1/fs:0.2;                % 0.2 second beep
+buzz = sin(2*pi*1000*t);       % 1 kHz tone
+
+% --- FATIGUE DETECTION AND BUZZER CONTROL ---
+if blinkFrameCount >= blinkThreshold || tiltFrameCount >= tiltThreshold
+    text(10, 30, 'FATIGUE DETECTED!', 'Color', 'r', 'FontSize', 14, 'FontWeight', 'bold');
+
+    % Play buzzer continuously (simulate with repeated sound bursts)
+    sound(buzz, fs);  % This plays for 0.2 sec each frame (~5/sec)
+    buzzer_on = true;
+
+else
+    text(10, 30, 'Normal', 'Color', 'g', 'FontSize', 14, 'FontWeight', 'bold');
+
+    if buzzer_on
+        % Stop sound if needed (there's no direct stop, so we just don't replay it)
+        disp('🔕 BUZZER OFF');
+        buzzer_on = false;
+    end
+end
+
+    end
+
+    drawnow;
+% -------- CLEANUP --------
+clear cam;
